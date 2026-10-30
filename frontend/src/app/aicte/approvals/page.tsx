@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { LoadingState, PageHeader, StatusBadge } from '@/components/ui';
-import AicteTable from '@/components/aicte/AicteTable';
+import AicteTable, { AicteInstitutionLink } from '@/components/aicte/AicteTable';
 
 interface Review {
   id: number;
@@ -17,7 +17,7 @@ interface Review {
 interface Application {
   id: number;
   application_id: string;
-  institution: { name: string; institution_id: string; state: string; district: string; institution_type: string; approved_courses: number; approved_intake: number };
+  institution: { id: number; name: string; institution_id: string; state: string; district: string; institution_type: string; approved_courses: number; approved_intake: number };
   submission_date: string;
   status: string;
   submitted_by: string;
@@ -79,7 +79,7 @@ export default function AicteApprovalsPage() {
   const rows = applications.map((application) => ({
     id: application.id,
     application_id: <span className="font-mono text-primary-container">{application.application_id}</span>,
-    institution: <div><p className="font-medium text-heading">{application.institution.name}</p><p className="text-xs text-muted">{application.institution.institution_id}</p></div>,
+    institution: <div><p className="font-medium text-heading"><AicteInstitutionLink institutionId={application.institution.id} from="approvals">{application.institution.name}</AicteInstitutionLink></p><p className="text-xs text-muted">{application.institution.institution_id}</p></div>,
     location: `${application.institution.district}, ${application.institution.state}`,
     submitted: application.submission_date ? new Date(application.submission_date).toLocaleDateString() : '—',
     status: <StatusBadge status={application.status} />,

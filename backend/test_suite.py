@@ -1,9 +1,10 @@
 """
-NEXUS APAAR — Complete 15-Point Automated Test Suite
+NEXUS APAAR — Complete 25-Point Automated Test Suite
 Verifies all functional, security, admission, capacity, and role-based access rules.
 Executes directly against application models and controllers with immediate progress reporting.
 """
-import sys, os, time, csv, io
+import sys, os, time, csv, io, asyncio
+from fastapi.testclient import TestClient
 sys.stdout.reconfigure(encoding='utf-8', line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -11,15 +12,19 @@ from database import SessionLocal
 import models, schemas, auth
 from routers import (
     auth_router, student_router, admin_router, admission_router,
-    credit_router, verification_router, capacity_router, audit_router
+    credit_router, verification_router, capacity_router, audit_router, aicte_router
 )
+
+async def collect_body_chunks(body_iterator):
+    return b"".join([chunk async for chunk in body_iterator])
+
 
 def run_tests():
     print("=" * 75, flush=True)
-    print("NEXUS APAAR — Running 15-Point Automated Test Suite (SIH 2026)", flush=True)
+    print("NEXUS APAAR — Running 25-Point Automated Test Suite (SIH 2026)", flush=True)
     print("=" * 75, flush=True)
     passed = 0
-    total = 15
+    total = 25
     db = SessionLocal()
 
     # Create dummy admin user mock for dependency injection
@@ -199,7 +204,7 @@ def run_tests():
     print("\n[TEST 12] CSV export validation...", flush=True)
     csv_res = admin_router.export_report(current_user=admin_user, db=db)
     # StreamingResponse — collect all chunks
-    body_bytes = b"".join(chunk for chunk in csv_res.body_iterator)
+    body_bytes = asyncio.run(collect_body_chunks(csv_res.body_iterator))
     reader = csv.reader(io.StringIO(body_bytes.decode('utf-8')))
     rows = list(reader)
     assert len(rows) >= 10, f"Expected ≥10 rows in CSV, got {len(rows)}"
@@ -236,6 +241,170 @@ def run_tests():
     assert r["team"] == "Zyvantha"
     assert h["status"] == "healthy"
     print(f"  ✓ PASS: Application metadata & health check verified ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 16 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 16] AICTE administrator institution overview response...", flush=True)
+    from main import app
+    from seed import seed_aicte_demo_data
+
+    aicte_user = db.query(models.UserAccount).filter(
+        models.UserAccount.role == "aicte_admin"
+    ).first()
+    assert aicte_user is not None, "Seeded AICTE administrator account is missing"
+    aicte_token = auth.create_access_token({"sub": str(aicte_user.id), "role": "aicte_admin"})
+    aicte_client = TestClient(app)
+    seeded_institution = db.query(models.AicteInstitution).order_by(models.AicteInstitution.id).first()
+    assert seeded_institution is not None, "Seeded AICTE institution is missing"
+    overview_response = aicte_client.get(
+        f"/api/aicte/institutions/{seeded_institution.id}/overview",
+        headers={"Authorization": f"Bearer {aicte_token}"},
+    )
+    assert overview_response.status_code == 200, overview_response.text
+    overview_data = overview_response.json()
+    expected_sections = {
+        "profile", "location", "key_dates", "study_model", "limits", "departments",
+        "outcomes", "passouts_last_year", "ranking", "compliance_snapshot",
+        "recent_decisions", "synthetic_notice",
+    }
+    assert expected_sections.issubset(overview_data), "Overview response is missing required sections"
+    assert overview_data["profile"]["institution_id"] == seeded_institution.institution_id
+    assert len(overview_data["outcomes"]) == 3
+    print(f"  ✓ PASS: AICTE overview returned all required sections ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 17 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 17] Unknown AICTE institution overview returns 404...", flush=True)
+    unknown_response = aicte_client.get(
+        "/api/aicte/institutions/2147483647/overview",
+        headers={"Authorization": f"Bearer {aicte_token}"},
+    )
+    assert unknown_response.status_code == 404
+    print(f"  ✓ PASS: Unknown institution overview rejected with 404 ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 18 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 18] Student token cannot access AICTE institution overview...", flush=True)
+    student_token = auth.create_access_token({"sub": str(user_1.id), "role": "student"})
+    student_overview = aicte_client.get(
+        f"/api/aicte/institutions/{seeded_institution.id}/overview",
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert student_overview.status_code == 403
+    print(f"  ✓ PASS: Student role receives 403 ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 19 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 19] College administrator token cannot access AICTE overview...", flush=True)
+    college_token = auth.create_access_token({"sub": str(admin_user.id), "role": "admin"})
+    college_overview = aicte_client.get(
+        f"/api/aicte/institutions/{seeded_institution.id}/overview",
+        headers={"Authorization": f"Bearer {college_token}"},
+    )
+    assert college_overview.status_code == 403
+    print(f"  ✓ PASS: College administrator role receives 403 ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 20 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 20] Missing token cannot access AICTE institution overview...", flush=True)
+    unauthenticated_overview = aicte_client.get(
+        f"/api/aicte/institutions/{seeded_institution.id}/overview"
+    )
+    assert unauthenticated_overview.status_code == 401
+    print(f"  ✓ PASS: Missing token receives 401 ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 21 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 21] Overview utilisation is calculated from institution aggregates...", flush=True)
+    profile = db.query(models.AicteInstitutionProfile).filter(
+        models.AicteInstitutionProfile.institution_id == seeded_institution.id
+    ).first()
+    assert profile is not None
+    expected_utilisation = round(profile.current_enrolled / profile.total_approved_intake * 100, 1)
+    assert overview_data["limits"]["utilisation_pct"] == expected_utilisation
+    print(f"  ✓ PASS: Utilisation matches enrolled / approved intake ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 22 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 22] Seeded institution department and capacity totals are consistent...", flush=True)
+    for institution in db.query(models.AicteInstitution).all():
+        institution_profile = institution.profile
+        assert institution_profile is not None, f"Missing overview profile for {institution.institution_id}"
+        departments = db.query(models.AicteInstitutionDepartment).filter(
+            models.AicteInstitutionDepartment.institution_id == institution.id
+        ).all()
+        courses = db.query(models.AicteCourse).filter(
+            models.AicteCourse.institution_id == institution.id,
+            models.AicteCourse.approval_status == "approved",
+        ).all()
+        assert sum(item.approved_intake for item in departments) == institution_profile.total_approved_intake
+        assert sum(item.approved_intake for item in courses) == institution_profile.total_approved_intake
+        assert sum(item.enrolled for item in departments) == institution_profile.current_enrolled
+        assert institution_profile.current_enrolled <= institution_profile.total_approved_intake
+        assert institution_profile.maximum_permitted_intake >= institution_profile.total_approved_intake
+        assert institution_profile.approval_valid_until > institution_profile.approval_valid_from
+        for outcome in institution.yearly_outcomes:
+            assert outcome.graduates <= institution_profile.total_approved_intake
+    print(f"  ✓ PASS: Capacity, enrolment, date, and outcome constraints hold for all seeded institutions ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 23 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 23] Passouts-last-year uses the latest completed outcome year...", flush=True)
+    latest_outcome = max(overview_data["outcomes"], key=lambda item: item["academic_year"])
+    assert overview_data["passouts_last_year"] == latest_outcome["graduates"]
+    print(f"  ✓ PASS: Latest completed year {latest_outcome['academic_year']} is used ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 24 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 24] Overview contains no student PII and declares synthetic data...", flush=True)
+    response_text = overview_response.text.lower()
+    response_keys = str(overview_data.keys()).lower()
+    def collect_response_keys(value):
+        if isinstance(value, dict):
+            return set(value.keys()).union(*(collect_response_keys(item) for item in value.values()))
+        if isinstance(value, list):
+            return set().union(*(collect_response_keys(item) for item in value))
+        return set()
+    response_keys += str(collect_response_keys(overview_data)).lower()
+    assert "student" not in response_keys and "apaar" not in response_keys
+    assert "900000000001" not in response_text
+    assert overview_data["synthetic_notice"] == "Synthetic demo data. Not verified official AICTE data."
+    print(f"  ✓ PASS: Response has no student identifiers and includes the required notice ({time.time()-t0:.3f}s)", flush=True)
+    passed += 1
+
+    # ─── TEST 25 ───────────────────────────────────────────────────────────────
+    t0 = time.time()
+    print("\n[TEST 25] AICTE profile seed is idempotent...", flush=True)
+    seed_aicte_demo_data(db)
+    db.flush()
+    profile_counts = (
+        db.query(models.AicteInstitutionProfile).count(),
+        db.query(models.AicteInstitutionDepartment).count(),
+        db.query(models.AicteInstitutionOutcome).count(),
+        db.query(models.AicteInstitutionRanking).count(),
+    )
+    seed_aicte_demo_data(db)
+    db.flush()
+    repeated_profile_counts = (
+        db.query(models.AicteInstitutionProfile).count(),
+        db.query(models.AicteInstitutionDepartment).count(),
+        db.query(models.AicteInstitutionOutcome).count(),
+        db.query(models.AicteInstitutionRanking).count(),
+    )
+    assert repeated_profile_counts == profile_counts
+    assert profile_counts[0] == db.query(models.AicteInstitution).count()
+    db.commit()
+    aicte_client.close()
+    print(f"  ✓ PASS: Profile, department, outcome, and ranking counts unchanged on reseed ({time.time()-t0:.3f}s)", flush=True)
     passed += 1
 
     db.close()

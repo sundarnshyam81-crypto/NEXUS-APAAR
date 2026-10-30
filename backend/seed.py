@@ -13,7 +13,7 @@ load_dotenv()
 from database import SessionLocal, engine
 import models
 from auth import get_password_hash
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import uuid
 
 models.Base.metadata.create_all(bind=engine)
@@ -344,6 +344,120 @@ def seed_aicte_demo_data(db):
             models.AicteNotification.title == title
         ).first():
             db.add(models.AicteNotification(title=title, message=message, notification_type=category))
+
+    profile_data = {
+        "DEMO-AICTE-001": ("University", "Government", "Synthetic National Technical University", "Sector 12, Academic Avenue", "New Delhi", "110078", "North", 28.6139, 77.2090, 1986, 125, 2024, "Standard annual review."),
+        "DEMO-AICTE-002": ("Affiliated College", "Private", "Synthetic Coastal State University", "18 Marina Road, Education District", "Chennai", "600025", "South", 13.0827, 80.2707, 2004, 142, 2024, "Maintain approved faculty strength."),
+        "DEMO-AICTE-003": ("Polytechnic", "Trust", "Synthetic Maharashtra Technical Board", "42 Western Valley Road", "Pune", "411007", "West", 18.5204, 73.8567, 2012, 36, 2023, "Intake capped at 60 pending compliance review."),
+        "DEMO-AICTE-004": ("University", "Government", "Synthetic Eastern Technical University", "7 Riverbank Campus Road", "Kolkata", "700091", "East", 22.5726, 88.3639, 1998, 63, 2024, "No new programmes during the current review cycle."),
+        "DEMO-AICTE-005": ("Autonomous College", "Society", "Synthetic Deccan Education Society", "5 Innovation Park", "Bengaluru", "560037", "South", 12.9716, 77.5946, 2007, 132, 2024, "Maintain infrastructure capacity for approved intake."),
+        "DEMO-AICTE-006": ("Affiliated College", "Government-aided", "Synthetic Rajasthan Technical University", "31 Aravali Campus Road", "Jaipur", "302017", "West", 26.9124, 75.7873, 1994, 27, 2023, "New intake requires a fresh compliance review."),
+        "DEMO-AICTE-007": ("Polytechnic", "Government", "Synthetic Uttarakhand Board of Technical Education", "9 Himalayan Learning Lane", "Dehradun", "248001", "North", 30.3165, 78.0322, 2001, 39, 2024, "Maintain approved safety and laboratory standards."),
+        "DEMO-AICTE-008": ("Autonomous College", "Government", "Synthetic Central Technical University", "16 Lakeview Institutional Road", "Bhopal", "462026", "Central", 23.2599, 77.4126, 1991, 89, 2024, "Standard annual review."),
+    }
+
+    for code, values in profile_data.items():
+        (
+            institution_type, ownership, affiliating_body, address_line, city, pincode,
+            region, latitude, longitude, established_year, enrolled_target,
+            rank_offset, approval_conditions,
+        ) = values
+        institution = institution_map[code]
+        courses = db.query(models.AicteCourse).filter(
+            models.AicteCourse.institution_id == institution.id,
+            models.AicteCourse.approval_status == "approved",
+        ).order_by(models.AicteCourse.course_name).all()
+        total_intake = sum(course.approved_intake for course in courses)
+        if not db.query(models.AicteInstitutionProfile).filter(
+            models.AicteInstitutionProfile.institution_id == institution.id
+        ).first():
+            db.add(models.AicteInstitutionProfile(
+                institution_id=institution.id,
+                display_name=institution.name,
+                institution_type=institution_type,
+                ownership=ownership,
+                affiliating_body=affiliating_body,
+                address_line=address_line,
+                city=city,
+                pincode=pincode,
+                region=region,
+                latitude=latitude,
+                longitude=longitude,
+                established_year=established_year,
+                registered_with_aicte_date=date(established_year + 2, 7, 1),
+                approval_valid_from=date(2026, 7, 1),
+                approval_valid_until=date(2027, 6, 30),
+                last_inspection_date=date(2025, 2, 1),
+                study_modes=["Full-time", "Hybrid"] if rank_offset % 2 else ["Full-time", "Part-time", "Hybrid"],
+                medium_of_instruction="English",
+                academic_structure="Semester system",
+                programme_levels=sorted({course.programme_level.replace("Undergraduate", "UG").replace("Postgraduate", "PG") for course in courses}),
+                abc_integration=True,
+                facilities_summary="Campus hostel, central library, programme laboratories, and placement cell.",
+                total_approved_intake=total_intake,
+                maximum_permitted_intake=total_intake + max(12, total_intake // 5),
+                current_enrolled=enrolled_target,
+                approval_conditions=approval_conditions,
+            ))
+            db.flush()
+
+        grouped_courses = {}
+        for course in courses:
+            grouped_courses.setdefault(course.department, []).append(course)
+        for department_name, department_courses in grouped_courses.items():
+            if db.query(models.AicteInstitutionDepartment).filter(
+                models.AicteInstitutionDepartment.institution_id == institution.id,
+                models.AicteInstitutionDepartment.department_name == department_name,
+            ).first():
+                continue
+            approved_intake = sum(course.approved_intake for course in department_courses)
+            enrolled = min(
+                approved_intake,
+                round(enrolled_target * approved_intake / total_intake) if total_intake else 0,
+            )
+            db.add(models.AicteInstitutionDepartment(
+                institution_id=institution.id,
+                department_name=department_name,
+                programmes=sorted({course.course_name for course in department_courses}),
+                hod_role_label="Head of Department",
+                approved_intake=approved_intake,
+                enrolled=enrolled,
+                faculty_count=max(8, (approved_intake + 14) // 15),
+                established_year=established_year + 3,
+            ))
+
+        for academic_year, year_offset, pass_rate, placement_rate in [
+            ("2022-23", 2, 78.0 + rank_offset % 9, 54.0 + rank_offset % 12),
+            ("2023-24", 1, 81.0 + rank_offset % 9, 58.0 + rank_offset % 12),
+            ("2024-25", 0, 84.0 + rank_offset % 9, 62.0 + rank_offset % 12),
+        ]:
+            if not db.query(models.AicteInstitutionOutcome).filter(
+                models.AicteInstitutionOutcome.institution_id == institution.id,
+                models.AicteInstitutionOutcome.academic_year == academic_year,
+            ).first():
+                db.add(models.AicteInstitutionOutcome(
+                    institution_id=institution.id,
+                    academic_year=academic_year,
+                    graduates=max(1, int(total_intake * (0.50 + year_offset * 0.02))),
+                    pass_percentage=pass_rate,
+                    placement_percentage=placement_rate,
+                ))
+
+        for ranking_year, demo_rank, score in [
+            (2024, 18 + rank_offset, 62.5 + rank_offset % 10),
+            (2025, 15 + rank_offset, 67.5 + rank_offset % 10),
+        ]:
+            if not db.query(models.AicteInstitutionRanking).filter(
+                models.AicteInstitutionRanking.institution_id == institution.id,
+                models.AicteInstitutionRanking.year == ranking_year,
+            ).first():
+                db.add(models.AicteInstitutionRanking(
+                    institution_id=institution.id,
+                    year=ranking_year,
+                    demo_rank=demo_rank,
+                    category=f"{institution_type} (synthetic)",
+                    score=score,
+                ))
 
 
 if __name__ == "__main__":

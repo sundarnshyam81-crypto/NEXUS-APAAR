@@ -116,6 +116,7 @@ export const api = {
       return apiJSON(`/api/aicte/institutions${q}`);
     },
     institution: (id: number) => apiJSON(`/api/aicte/institutions/${id}`),
+    institutionOverview: (id: number) => apiJSON(`/api/aicte/institutions/${id}/overview`),
     applications: (params?: Record<string, string>) => {
       const q = params ? '?' + new URLSearchParams(params).toString() : '';
       return apiJSON(`/api/aicte/applications${q}`);

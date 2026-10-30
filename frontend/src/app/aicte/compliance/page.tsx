@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { LoadingState, PageHeader, StatCard, StatusBadge } from '@/components/ui';
-import AicteTable from '@/components/aicte/AicteTable';
+import AicteTable, { AicteInstitutionLink } from '@/components/aicte/AicteTable';
 
 interface Submission {
   id: number;
   submission_id: string;
   institution: string;
+  institution_pk: number;
   institution_id: string;
   state: string;
   report_type: string;
@@ -25,6 +26,7 @@ interface ComplianceData {
 }
 
 export default function AicteCompliancePage() {
+  const [institutionFilter, setInstitutionFilter] = useState('');
   const [data, setData] = useState<ComplianceData | null>(null);
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -39,6 +41,7 @@ export default function AicteCompliancePage() {
       const params: Record<string, string> = {};
       if (filter) params.status_filter = filter;
       if (search.trim()) params.search = search.trim();
+      if (institutionFilter) params.institution_id = institutionFilter;
       setData(await api.aicte.compliance(params));
     } catch (loadError) {
       setError((loadError as Error).message || 'Unable to load compliance submissions.');
@@ -48,8 +51,12 @@ export default function AicteCompliancePage() {
   };
 
   useEffect(() => {
-    api.aicte.compliance()
-      .then((result: ComplianceData) => setData(result))
+    const filterId = new URLSearchParams(window.location.search).get('institution_id') || '';
+    api.aicte.compliance(filterId ? { institution_id: filterId } : undefined)
+      .then((result: ComplianceData) => {
+        setInstitutionFilter(filterId);
+        setData(result);
+      })
       .catch((loadError: Error) => setError(loadError.message || 'Unable to load compliance submissions.'))
       .finally(() => setLoading(false));
   }, []);
@@ -78,7 +85,7 @@ export default function AicteCompliancePage() {
   const rows = (data?.submissions || []).map((submission) => ({
     id: submission.id,
     submission: <span className="font-mono text-primary-container">{submission.submission_id}</span>,
-    institution: <div><p className="font-medium text-heading">{submission.institution}</p><p className="text-xs text-muted">{submission.institution_id} · {submission.state}</p></div>,
+    institution: <div><p className="font-medium text-heading"><AicteInstitutionLink institutionId={submission.institution_pk} from="compliance">{submission.institution}</AicteInstitutionLink></p><p className="text-xs text-muted">{submission.institution_id} · {submission.state}</p></div>,
     report: submission.report_type,
     year: submission.academic_year,
     due: submission.due_date ? new Date(submission.due_date).toLocaleDateString() : '—',
@@ -96,6 +103,10 @@ export default function AicteCompliancePage() {
   return (
     <div className="space-y-6">
       <PageHeader kicker="Institutional returns" title="Compliance Monitoring" description="Track required submissions and record review outcomes for synthetic institution records." />
+      {institutionFilter && <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 text-sm text-body">
+        <span>Showing compliance records for institution ID {institutionFilter}.</span>
+        <a href="/aicte/compliance" className="text-primary-container hover:underline">Clear institution filter</a>
+      </div>}
       {error && <div role="alert" className="rounded-lg border border-rejected/20 bg-rejected-bg p-3 text-sm text-rejected">{error}</div>}
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

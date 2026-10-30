@@ -178,6 +178,160 @@ def list_institutions(
     return {"institutions": [_institution_record(i) for i in records], "total": total, "page": page, "page_size": page_size}
 
 
+@router.get(
+    "/institutions/{institution_id}/overview",
+    response_model=schemas.AicteInstitutionOverviewResponse,
+)
+def institution_overview(
+    institution_id: int,
+    current_user: models.UserAccount = Depends(auth.require_aicte_admin),
+    db: Session = Depends(get_db),
+):
+    institution = db.query(models.AicteInstitution).filter(
+        models.AicteInstitution.id == institution_id
+    ).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+
+    profile = db.query(models.AicteInstitutionProfile).filter(
+        models.AicteInstitutionProfile.institution_id == institution.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Institution overview not found")
+
+    courses = db.query(models.AicteCourse).filter(
+        models.AicteCourse.institution_id == institution.id,
+        models.AicteCourse.approval_status == "approved",
+    ).order_by(models.AicteCourse.course_name).all()
+    departments = db.query(models.AicteInstitutionDepartment).filter(
+        models.AicteInstitutionDepartment.institution_id == institution.id
+    ).order_by(models.AicteInstitutionDepartment.department_name).all()
+    outcomes = db.query(models.AicteInstitutionOutcome).filter(
+        models.AicteInstitutionOutcome.institution_id == institution.id
+    ).order_by(models.AicteInstitutionOutcome.academic_year.desc()).limit(3).all()
+    rankings = db.query(models.AicteInstitutionRanking).filter(
+        models.AicteInstitutionRanking.institution_id == institution.id
+    ).order_by(models.AicteInstitutionRanking.year.desc()).limit(2).all()
+    compliance = db.query(models.AicteComplianceSubmission).filter(
+        models.AicteComplianceSubmission.institution_id == institution.id
+    ).all()
+    decisions = db.query(models.AicteAuditLog).filter(
+        models.AicteAuditLog.institution_id == institution.id
+    ).order_by(models.AicteAuditLog.created_at.desc()).limit(8).all()
+
+    latest_outcome = outcomes[0] if outcomes else None
+    latest_ranking = rankings[0] if rankings else None
+    previous_ranking = rankings[1] if len(rankings) > 1 else None
+
+    return {
+        "profile": {
+            "institution_id": institution.institution_id,
+            "display_name": profile.display_name,
+            "institution_type": profile.institution_type,
+            "ownership": profile.ownership,
+            "affiliating_body": profile.affiliating_body,
+            "approval_status": institution.approval_status,
+        },
+        "location": {
+            "address_line": profile.address_line,
+            "city": profile.city,
+            "district": institution.district,
+            "state": institution.state,
+            "pincode": profile.pincode,
+            "region": profile.region,
+            "latitude": profile.latitude,
+            "longitude": profile.longitude,
+        },
+        "key_dates": {
+            "established_year": profile.established_year,
+            "registered_with_aicte_date": profile.registered_with_aicte_date,
+            "approval_valid_from": profile.approval_valid_from,
+            "approval_valid_until": profile.approval_valid_until,
+            "last_inspection_date": profile.last_inspection_date,
+        },
+        "study_model": {
+            "study_modes": profile.study_modes,
+            "medium_of_instruction": profile.medium_of_instruction,
+            "academic_structure": profile.academic_structure,
+            "programme_levels": profile.programme_levels,
+            "abc_integration": profile.abc_integration,
+            "facilities_summary": profile.facilities_summary,
+        },
+        "limits": {
+            "total_approved_intake": profile.total_approved_intake,
+            "maximum_permitted_intake": profile.maximum_permitted_intake,
+            "current_enrolled": profile.current_enrolled,
+            "utilisation_pct": round(
+                profile.current_enrolled / profile.total_approved_intake * 100, 1
+            ) if profile.total_approved_intake else 0.0,
+            "programme_intakes": [
+                {
+                    "programme": course.course_name,
+                    "department": course.department,
+                    "programme_level": course.programme_level,
+                    "approved_intake": course.approved_intake,
+                }
+                for course in courses
+            ],
+            "approval_conditions": profile.approval_conditions,
+        },
+        "departments": [
+            {
+                "department_name": department.department_name,
+                "programmes": department.programmes,
+                "hod_role_label": department.hod_role_label,
+                "approved_intake": department.approved_intake,
+                "enrolled": department.enrolled,
+                "faculty_count": department.faculty_count,
+                "established_year": department.established_year,
+            }
+            for department in departments
+        ],
+        "outcomes": [
+            {
+                "academic_year": outcome.academic_year,
+                "graduates": outcome.graduates,
+                "pass_percentage": outcome.pass_percentage,
+                "placement_percentage": outcome.placement_percentage,
+            }
+            for outcome in reversed(outcomes)
+        ],
+        "passouts_last_year": latest_outcome.graduates if latest_outcome else 0,
+        "ranking": {
+            "year": latest_ranking.year,
+            "demo_rank": latest_ranking.demo_rank,
+            "category": latest_ranking.category,
+            "score": latest_ranking.score,
+            "previous_year_rank": previous_ranking.demo_rank if previous_ranking else None,
+            "rank_change": (
+                previous_ranking.demo_rank - latest_ranking.demo_rank
+                if previous_ranking else None
+            ),
+        } if latest_ranking else None,
+        "compliance_snapshot": {
+            "pending": sum(item.status in ["pending", "under_review"] for item in compliance),
+            "submitted": sum(
+                item.status == "completed" or item.submitted_at is not None
+                for item in compliance
+            ),
+            "overdue": sum(item.status == "overdue" for item in compliance),
+        },
+        "recent_decisions": [
+            {
+                "activity": decision.activity,
+                "administrator": decision.administrator,
+                "action": {
+                    "institution_approval_review": "Institution approval decision recorded",
+                    "compliance_submission_review": "Institution compliance review recorded",
+                }.get(decision.activity, "Institutional administrative action recorded"),
+                "timestamp": decision.created_at,
+            }
+            for decision in decisions
+        ],
+        "synthetic_notice": "Synthetic demo data. Not verified official AICTE data.",
+    }
+
+
 @router.get("/institutions/{institution_id}")
 def institution_detail(
     institution_id: int,
@@ -346,6 +500,7 @@ def list_courses(
                 "id": course.id,
                 "course_code": course.course_code,
                 "institution": course.institution.name,
+                "institution_pk": course.institution.id,
                 "institution_id": course.institution.institution_id,
                 "state": course.institution.state,
                 "department": course.department,
@@ -365,6 +520,7 @@ def list_courses(
 def list_compliance(
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
+    institution_id: Optional[int] = Query(None, ge=1),
     current_user: models.UserAccount = Depends(auth.require_aicte_admin),
     db: Session = Depends(get_db),
 ):
@@ -373,6 +529,8 @@ def list_compliance(
     )
     if status_filter:
         query = query.filter(models.AicteComplianceSubmission.status == status_filter)
+    if institution_id is not None:
+        query = query.filter(models.AicteComplianceSubmission.institution_id == institution_id)
     if search:
         term = f"%{search.strip()}%"
         query = query.join(models.AicteInstitution).filter(or_(
@@ -388,6 +546,7 @@ def list_compliance(
                 "id": item.id,
                 "submission_id": item.submission_id,
                 "institution": item.institution.name,
+                "institution_pk": item.institution.id,
                 "institution_id": item.institution.institution_id,
                 "state": item.institution.state,
                 "report_type": item.report_type,

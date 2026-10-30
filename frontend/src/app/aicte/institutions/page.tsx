@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { EmptyState, LoadingState, PageHeader, StatusBadge } from '@/components/ui';
-import AicteTable from '@/components/aicte/AicteTable';
+import AicteTable, { AicteInstitutionLink } from '@/components/aicte/AicteTable';
 
 interface Institution {
   id: number;
@@ -81,7 +81,7 @@ export default function AicteInstitutionsPage() {
 
   const rows = institutions.map((institution) => ({
     id: institution.id,
-    name: <button onClick={() => viewInstitution(institution.id)} className="text-primary-container font-medium hover:underline text-left">{institution.name}</button>,
+    name: <AicteInstitutionLink institutionId={institution.id} from="directory" className="font-medium text-left">{institution.name}</AicteInstitutionLink>,
     institution_id: <span className="font-mono">{institution.institution_id}</span>,
     location: `${institution.district}, ${institution.state}`,
     type: institution.institution_type,

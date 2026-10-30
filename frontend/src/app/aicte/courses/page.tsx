@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { LoadingState, PageHeader, StatusBadge } from '@/components/ui';
-import AicteTable from '@/components/aicte/AicteTable';
+import AicteTable, { AicteInstitutionLink } from '@/components/aicte/AicteTable';
 
 interface Course {
   id: number;
   course_code: string;
   institution: string;
+  institution_pk: number;
   institution_id: string;
   state: string;
   department: string;
@@ -54,7 +55,7 @@ export default function AicteCoursesPage() {
   const rows = courses.map((course) => ({
     id: course.id,
     code: <span className="font-mono text-primary-container">{course.course_code}</span>,
-    institution: <div><p className="font-medium text-heading">{course.institution}</p><p className="text-xs text-muted">{course.institution_id} · {course.state}</p></div>,
+    institution: <div><p className="font-medium text-heading"><AicteInstitutionLink institutionId={course.institution_pk} from="courses">{course.institution}</AicteInstitutionLink></p><p className="text-xs text-muted">{course.institution_id} · {course.state}</p></div>,
     department: course.department,
     course: course.course_name,
     level: course.programme_level,

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@/lib/api';
 import { EmptyState, LoadingState, PageHeader, StatCard, StatusBadge } from '@/components/ui';
-import AicteTable from '@/components/aicte/AicteTable';
+import AicteTable, { AicteInstitutionLink } from '@/components/aicte/AicteTable';
 
 interface DashboardData {
   data_notice: string;
@@ -20,8 +20,8 @@ interface DashboardData {
     overdue_compliance: number;
   };
   state_distribution: Array<{ state: string; institutions: number }>;
-  recent_applications: Array<{ id: number; application_id: string; institution: { name: string; state: string }; status: string; submission_date: string }>;
-  pending_requests: Array<{ id: number; application_id: string; institution: { name: string; state: string }; status: string; submission_date: string }>;
+  recent_applications: Array<{ id: number; application_id: string; institution: { id: number; name: string; state: string }; status: string; submission_date: string }>;
+  pending_requests: Array<{ id: number; application_id: string; institution: { id: number; name: string; state: string }; status: string; submission_date: string }>;
   notifications: Array<{ id: number; title: string; message: string; notification_type: string }>;
 }
 
@@ -45,7 +45,7 @@ export default function AicteDashboardPage() {
   const applicationRows = data.pending_requests.map((application) => ({
     id: application.id,
     application: <span className="font-mono text-primary-container">{application.application_id}</span>,
-    institution: application.institution.name,
+    institution: <AicteInstitutionLink institutionId={application.institution.id} from="dashboard">{application.institution.name}</AicteInstitutionLink>,
     state: application.institution.state,
     submitted: application.submission_date ? new Date(application.submission_date).toLocaleDateString() : '—',
     status: <StatusBadge status={application.status} />,
@@ -144,7 +144,7 @@ export default function AicteDashboardPage() {
           {data.recent_applications.length ? data.recent_applications.slice(0, 4).map((application) => (
             <div key={application.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border last:border-0 pb-3 last:pb-0">
               <div>
-                <p className="font-medium text-heading">{application.institution.name}</p>
+                <p className="font-medium text-heading"><AicteInstitutionLink institutionId={application.institution.id} from="dashboard">{application.institution.name}</AicteInstitutionLink></p>
                 <p className="text-xs text-muted">{application.application_id} · {application.submission_date ? new Date(application.submission_date).toLocaleDateString() : 'Date unavailable'}</p>
               </div>
               <StatusBadge status={application.status} />

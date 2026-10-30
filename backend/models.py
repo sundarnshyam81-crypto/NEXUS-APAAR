@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Float
+from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Text, Boolean, Float, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -173,6 +173,91 @@ class AicteInstitution(Base):
     applications = relationship("AicteApprovalApplication", back_populates="institution")
     courses = relationship("AicteCourse", back_populates="institution")
     compliance_submissions = relationship("AicteComplianceSubmission", back_populates="institution")
+    profile = relationship("AicteInstitutionProfile", back_populates="institution", uselist=False)
+    departments = relationship("AicteInstitutionDepartment", back_populates="institution")
+    yearly_outcomes = relationship("AicteInstitutionOutcome", back_populates="institution")
+    rankings = relationship("AicteInstitutionRanking", back_populates="institution")
+
+
+class AicteInstitutionProfile(Base):
+    __tablename__ = "aicte_institution_profiles"
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("aicte_institutions.id"), unique=True, nullable=False)
+    display_name = Column(String(200), nullable=False)
+    institution_type = Column(String(60), nullable=False)
+    ownership = Column(String(60), nullable=False)
+    affiliating_body = Column(String(160), nullable=False)
+    address_line = Column(String(240), nullable=False)
+    city = Column(String(100), nullable=False)
+    pincode = Column(String(10), nullable=False)
+    region = Column(String(20), nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    established_year = Column(Integer, nullable=False)
+    registered_with_aicte_date = Column(Date, nullable=False)
+    approval_valid_from = Column(Date, nullable=False)
+    approval_valid_until = Column(Date, nullable=False)
+    last_inspection_date = Column(Date, nullable=False)
+    study_modes = Column(JSON, nullable=False)
+    medium_of_instruction = Column(String(100), nullable=False)
+    academic_structure = Column(String(100), nullable=False)
+    programme_levels = Column(JSON, nullable=False)
+    abc_integration = Column(Boolean, nullable=False)
+    facilities_summary = Column(Text, nullable=False)
+    total_approved_intake = Column(Integer, nullable=False)
+    maximum_permitted_intake = Column(Integer, nullable=False)
+    current_enrolled = Column(Integer, nullable=False)
+    approval_conditions = Column(Text, nullable=False)
+
+    institution = relationship("AicteInstitution", back_populates="profile")
+
+
+class AicteInstitutionDepartment(Base):
+    __tablename__ = "aicte_institution_departments"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "department_name", name="uq_aicte_department"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("aicte_institutions.id"), nullable=False)
+    department_name = Column(String(120), nullable=False)
+    programmes = Column(JSON, nullable=False)
+    hod_role_label = Column(String(80), nullable=False)
+    approved_intake = Column(Integer, nullable=False)
+    enrolled = Column(Integer, nullable=False)
+    faculty_count = Column(Integer, nullable=False)
+    established_year = Column(Integer, nullable=False)
+
+    institution = relationship("AicteInstitution", back_populates="departments")
+
+
+class AicteInstitutionOutcome(Base):
+    __tablename__ = "aicte_institution_outcomes"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "academic_year", name="uq_aicte_outcome_year"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("aicte_institutions.id"), nullable=False)
+    academic_year = Column(String(10), nullable=False)
+    graduates = Column(Integer, nullable=False)
+    pass_percentage = Column(Float, nullable=False)
+    placement_percentage = Column(Float, nullable=False)
+
+    institution = relationship("AicteInstitution", back_populates="yearly_outcomes")
+
+
+class AicteInstitutionRanking(Base):
+    __tablename__ = "aicte_institution_rankings"
+    __table_args__ = (
+        UniqueConstraint("institution_id", "year", name="uq_aicte_ranking_year"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("aicte_institutions.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    demo_rank = Column(Integer, nullable=False)
+    category = Column(String(100), nullable=False)
+    score = Column(Float, nullable=False)
+
+    institution = relationship("AicteInstitution", back_populates="rankings")
 
 
 class AicteApprovalApplication(Base):

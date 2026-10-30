@@ -74,6 +74,9 @@ All demonstration identifiers are **strictly 12-digit numeric strings** stored w
 - Configure `AICTE_ADMIN_ID` and `AICTE_ADMIN_PASSWORD` in `backend/.env` to override the local demo credentials.
 - Seed the AICTE administrator account and synthetic institutional records with `python seed.py`.
 - Institution, approval, course, intake, and compliance data in this portal are synthetic and are **not verified official AICTE data**. This application does not connect to AICTE systems.
+- Institution names in the directory, applications, course list, dashboard and compliance list open an institution overview at `/aicte/institutions/{id}`. The overview API is `GET /api/aicte/institutions/{id}/overview` and is restricted to AICTE administrators.
+- Seeded overview profiles include synthetic institution identity and ownership, location, affiliation, approval dates, study modes, facilities, approved intake and enrolment aggregates, departments, three years of outcomes, demo rankings, compliance counts, and review history. Department statistics contain institution-level aggregates only and no student names or identifiers.
+- Institution dates, outcome percentages/passouts, and values labeled **Demo ranking (synthetic)** are fictional demonstration values, not verified official AICTE data.
 
 ---
 
@@ -114,7 +117,7 @@ npm run dev
 
 ---
 
-## 6. Running the Automated 15-Point Test Suite
+## 6. Running the Automated 25-Point Test Suite
 
 The project includes an automated test script validating all SIH requirements:
 ```bash
@@ -138,6 +141,16 @@ python test_suite.py
 13. `TEST 13`: Operates gracefully without an external Gemini API key.
 14. `TEST 14`: Simulated verification is explicitly declared and never misrepresented as real ZKP.
 15. `TEST 15`: All application routes and health checks pass.
+16. `TEST 16`: AICTE administrators receive complete seeded institution overview sections.
+17. `TEST 17`: Unknown institution overview IDs return 404.
+18. `TEST 18`: Student tokens are forbidden from institution overviews.
+19. `TEST 19`: College administrator tokens are forbidden from institution overviews.
+20. `TEST 20`: Institution overviews require an authenticated token.
+21. `TEST 21`: Utilisation is derived from enrolled and approved intake totals.
+22. `TEST 22`: Department approved intakes sum to institution approved intake.
+23. `TEST 23`: Passouts-last-year uses the latest completed outcomes year.
+24. `TEST 24`: Overview responses exclude student identifiers and declare synthetic data.
+25. `TEST 25`: Re-running the AICTE profile seed does not duplicate records.
 
 ---
 

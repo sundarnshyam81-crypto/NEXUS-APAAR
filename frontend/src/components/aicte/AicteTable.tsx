@@ -1,6 +1,28 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+
+export function AicteInstitutionLink({
+  institutionId,
+  children,
+  className = '',
+  from,
+}: {
+  institutionId: number;
+  children: React.ReactNode;
+  className?: string;
+  from?: string;
+}) {
+  return (
+    <Link
+      href={`/aicte/institutions/${institutionId}${from ? `?from=${encodeURIComponent(from)}` : ''}`}
+      className={`rounded-sm text-primary-container hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
 
 export interface AicteColumn {
   key: string;

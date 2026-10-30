@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import date, datetime
 
 
 class TokenResponse(BaseModel):
@@ -58,6 +58,137 @@ class AicteComplianceReviewRequest(BaseModel):
         if value not in ["under_review", "completed", "pending", "overdue"]:
             raise ValueError("Invalid compliance status")
         return value
+
+
+class AicteOverviewProfile(BaseModel):
+    institution_id: str
+    display_name: str
+    institution_type: str
+    ownership: str
+    affiliating_body: str
+    approval_status: str
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewLocation(BaseModel):
+    address_line: str
+    city: str
+    district: str
+    state: str
+    pincode: str
+    region: str
+    latitude: Optional[float]
+    longitude: Optional[float]
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewDates(BaseModel):
+    established_year: int
+    registered_with_aicte_date: date
+    approval_valid_from: date
+    approval_valid_until: date
+    last_inspection_date: date
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewStudyModel(BaseModel):
+    study_modes: List[str]
+    medium_of_instruction: str
+    academic_structure: str
+    programme_levels: List[str]
+    abc_integration: bool
+    facilities_summary: str
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewProgrammeIntake(BaseModel):
+    programme: str
+    department: str
+    programme_level: str
+    approved_intake: int
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewLimits(BaseModel):
+    total_approved_intake: int
+    maximum_permitted_intake: int
+    current_enrolled: int
+    utilisation_pct: float
+    programme_intakes: List[AicteOverviewProgrammeIntake]
+    approval_conditions: str
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewDepartment(BaseModel):
+    department_name: str
+    programmes: List[str]
+    hod_role_label: str
+    approved_intake: int
+    enrolled: int
+    faculty_count: int
+    established_year: int
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewOutcome(BaseModel):
+    academic_year: str
+    graduates: int
+    pass_percentage: float
+    placement_percentage: float
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewRanking(BaseModel):
+    year: int
+    demo_rank: int
+    category: str
+    score: float
+    previous_year_rank: Optional[int]
+    rank_change: Optional[int]
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewCompliance(BaseModel):
+    pending: int
+    submitted: int
+    overdue: int
+
+    model_config = {"strict": True}
+
+
+class AicteOverviewDecision(BaseModel):
+    activity: str
+    administrator: str
+    action: str
+    timestamp: datetime
+
+    model_config = {"strict": True}
+
+
+class AicteInstitutionOverviewResponse(BaseModel):
+    profile: AicteOverviewProfile
+    location: AicteOverviewLocation
+    key_dates: AicteOverviewDates
+    study_model: AicteOverviewStudyModel
+    limits: AicteOverviewLimits
+    departments: List[AicteOverviewDepartment]
+    outcomes: List[AicteOverviewOutcome]
+    passouts_last_year: int
+    ranking: Optional[AicteOverviewRanking]
+    compliance_snapshot: AicteOverviewCompliance
+    recent_decisions: List[AicteOverviewDecision]
+    synthetic_notice: str
+
+    model_config = {"strict": True}
 
 
 class StudentProfileResponse(BaseModel):
